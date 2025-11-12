@@ -256,6 +256,17 @@
             100% { transform: rotate(360deg); }
         }
 
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
         .tag {
             display: inline-block;
             background: #e3f2fd;
@@ -307,6 +318,24 @@
                     <button type="submit" class="btn btn-primary">알림 추가</button>
                 </form>
 
+                <div style="margin-top: 30px; padding-top: 30px; border-top: 2px solid #e0e0e0;">
+                    <h3 style="margin-bottom: 15px; color: #333;">인용 수 기준 알림</h3>
+                    <form id="citationAlertForm">
+                        <div class="form-group">
+                            <label for="citationKeywords">키워드 (쉼표로 구분) *</label>
+                            <input type="text" id="citationKeywords" placeholder="예: depression, anxiety" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="minCitations">최소 인용 수 *</label>
+                            <input type="number" id="minCitations" placeholder="예: 10" min="1" required>
+                            <small style="color: #666; font-size: 0.85em; margin-top: 5px; display: block;">
+                                이 인용 수 이상인 논문이 나오면 알림을 받습니다
+                            </small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">인용 수 알림 추가</button>
+                    </form>
+                </div>
+
                 <div style="margin-top: 30px;">
                     <h3 style="margin-bottom: 15px; color: #333;">활성 알림</h3>
                     <div id="alertsList">
@@ -324,7 +353,8 @@
                 </div>
                 
                 <div style="margin-bottom: 30px;">
-                    <h3 style="color: #667eea; margin-bottom: 15px; font-size: 1.3em;">🔥 인기 논문 (인용 10회 이상, 인용 수 높은 순)</h3>
+                    <h3 style="color: #667eea; margin-bottom: 15px; font-size: 1.3em;">🔥 인기 논문 (지난 5년 내, 인용 수 높은 순)</h3>
+                    <small style="color: #666; display: block; margin-bottom: 10px;">인용 수 정보가 있는 논문 중 인기 논문을 표시합니다.</small>
                     <div id="popularPapersList">
                         <div class="empty-state">
                             <p>논문을 검색하려면 알림을 설정하세요.</p>
@@ -375,6 +405,7 @@
                 <div class="alert-item">
                     <div>
                         <div class="keywords">${alert.keywords.map(k => `<span class="tag">${escapeHtml(k)}</span>`).join('')}</div>
+                        ${alert.minCitations && alert.minCitations > 0 ? `<div style="margin-top: 5px; color: #667eea; font-weight: 600;">📊 인용 수 알림: ${alert.minCitations}회 이상</div>` : ''}
                         <small style="color: #666;">${alert.createdAt ? new Date(alert.createdAt).toLocaleDateString('ko-KR') : ''}</small>
                     </div>
                     <div class="actions">
@@ -399,6 +430,7 @@
             const newAlert = {
                 id: Date.now().toString(),
                 keywords: keywords,
+                minCitations: 0, // 일반 알림은 인용 수 기준 없음
                 createdAt: new Date().toISOString()
             };
 
@@ -406,6 +438,43 @@
             localStorage.setItem('paperAlerts', JSON.stringify(alerts));
             
             document.getElementById('alertForm').reset();
+            displayAlerts();
+            updateStats();
+            searchPapers();
+        });
+
+        // 인용 수 기준 알림 추가
+        document.getElementById('citationAlertForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const keywordsInput = document.getElementById('citationKeywords').value.trim();
+            const minCitationsInput = document.getElementById('minCitations').value.trim();
+            
+            if (!keywordsInput) {
+                alert('키워드를 입력해주세요.');
+                return;
+            }
+
+            const minCitations = parseInt(minCitationsInput);
+            if (!minCitations || minCitations < 1) {
+                alert('최소 인용 수를 1 이상으로 입력해주세요.');
+                return;
+            }
+
+            const keywords = keywordsInput.split(',').map(k => k.trim()).filter(k => k);
+            
+            const newAlert = {
+                id: Date.now().toString(),
+                keywords: keywords,
+                minCitations: minCitations,
+                isCitationAlert: true, // 인용 수 알림 구분
+                createdAt: new Date().toISOString()
+            };
+
+            alerts.push(newAlert);
+            localStorage.setItem('paperAlerts', JSON.stringify(alerts));
+            
+            document.getElementById('citationAlertForm').reset();
             displayAlerts();
             updateStats();
             searchPapers();
@@ -454,16 +523,18 @@
                 twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
                 const yearFrom = twoYearsAgo.getFullYear();
                 const today = new Date();
-                const yearTo = today.getFullYear();
+                const yearTo = today.getFullYear() + 1; // 미래 년도도 포함 (예정된 출판일)
 
                 // PubMed API 사용 - 실제 발행된 논문만 (더 신뢰할 수 있는 데이터)
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000);
                 
                 // PubMed API: 최근 2년, 심리학 관련, 실제 발행된 논문만
+                // PDAT: Publication Date (실제 출판일)
+                // epubdate 필터는 별도로 처리
                 const pubmedQuery = `${searchQuery} AND (${yearFrom}[PDAT] : ${yearTo}[PDAT]) AND psychology[MeSH Terms]`;
                 const response = await fetch(
-                    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(pubmedQuery)}&retmax=15&retmode=json&sort=pub_date`,
+                    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(pubmedQuery)}&retmax=50&retmode=json&sort=pub_date`,
                     {
                         headers: {
                             'Accept': 'application/json'
@@ -508,33 +579,70 @@
                 let papers = Object.values(detailData.result || {}).filter(p => p.uid !== '');
 
                 // Semantic Scholar API로 추가 정보 가져오기 (요약, 인용 등)
-                // PubMed 제목으로 Semantic Scholar 검색
-                const semanticPromises = papers.slice(0, 10).map(async (paper) => {
+                // PubMed PMID를 사용해서 더 정확하게 검색
+                const semanticPromises = papers.slice(0, 20).map(async (paper) => {
                     try {
+                        const pmid = paper.uid || '';
                         const title = paper.title || '';
-                        if (!title) return paper;
+                        if (!pmid && !title) return paper;
                         
-                        // Semantic Scholar API (무료, API 키 불필요)
-                        const semanticResponse = await fetch(
-                            `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&limit=1&fields=abstract,citationCount,year`,
-                            {
-                                headers: {
-                                    'Accept': 'application/json'
-                                },
-                                signal: controller.signal
-                            }
-                        );
+                        let semanticPaper = null;
                         
-                        if (semanticResponse.ok) {
-                            const semanticData = await semanticResponse.json();
-                            if (semanticData.data && semanticData.data.length > 0) {
-                                const semanticPaper = semanticData.data[0];
-                                // Semantic Scholar 정보 병합
-                                paper.abstract = semanticPaper.abstract || '';
-                                paper.citationCount = semanticPaper.citationCount || 0;
-                                if (semanticPaper.year && !paper.pubdate) {
-                                    paper.pubdate = semanticPaper.year.toString();
+                        // 방법 1: PMID로 직접 검색 (가장 정확)
+                        if (pmid) {
+                            try {
+                                const pmidResponse = await fetch(
+                                    `https://api.semanticscholar.org/graph/v1/paper/PMID:${pmid}?fields=abstract,citationCount,year,title`,
+                                    {
+                                        headers: {
+                                            'Accept': 'application/json'
+                                        },
+                                        signal: controller.signal
+                                    }
+                                );
+                                
+                                if (pmidResponse.ok) {
+                                    semanticPaper = await pmidResponse.json();
                                 }
+                            } catch (e) {
+                                // PMID 검색 실패 시 제목으로 검색
+                            }
+                        }
+                        
+                        // 방법 2: 제목으로 검색 (PMID 실패 시)
+                        if (!semanticPaper && title) {
+                            try {
+                                const titleResponse = await fetch(
+                                    `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&limit=3&fields=abstract,citationCount,year,title`,
+                                    {
+                                        headers: {
+                                            'Accept': 'application/json'
+                                        },
+                                        signal: controller.signal
+                                    }
+                                );
+                                
+                                if (titleResponse.ok) {
+                                    const titleData = await titleResponse.json();
+                                    if (titleData.data && titleData.data.length > 0) {
+                                        // 제목이 가장 유사한 논문 찾기
+                                        const titleLower = title.toLowerCase();
+                                        semanticPaper = titleData.data.find(p => 
+                                            p.title && p.title.toLowerCase().includes(titleLower.substring(0, 20))
+                                        ) || titleData.data[0];
+                                    }
+                                }
+                            } catch (e) {
+                                // 제목 검색도 실패
+                            }
+                        }
+                        
+                        // Semantic Scholar 정보 병합
+                        if (semanticPaper) {
+                            paper.abstract = semanticPaper.abstract || paper.abstract || '';
+                            paper.citationCount = semanticPaper.citationCount || paper.citationCount || 0;
+                            if (semanticPaper.year && !paper.pubdate) {
+                                paper.pubdate = semanticPaper.year.toString();
                             }
                         }
                     } catch (e) {
@@ -546,23 +654,151 @@
 
                 // 모든 Semantic Scholar 요청 완료 대기
                 papers = await Promise.all(semanticPromises);
-
+                
+                // 현재 날짜 기준
+                const currentDate = new Date();
+                const currentYear = currentDate.getFullYear();
+                const currentMonth = currentDate.getMonth() + 1; // 1-12
+                const currentDay = currentDate.getDate();
+                const fiveYearsAgo = currentYear - 5;
+                const tenYearsAgo = currentYear - 10;
+                
+                // 날짜 파싱 함수 (논문 날짜를 Date 객체로 변환)
+                const parsePaperDate = (dateStr) => {
+                    if (!dateStr) return null;
+                    
+                    try {
+                        // "2024 Jan 15" 형식
+                        if (dateStr.includes(' ')) {
+                            const parts = dateStr.split(' ');
+                            const year = parseInt(parts[0]);
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const month = parts[1] ? monthNames.indexOf(parts[1]) + 1 : 1;
+                            const day = parts[2] ? parseInt(parts[2]) : 1;
+                            return new Date(year, month - 1, day);
+                        }
+                        // "2024/01/15" 형식
+                        else if (dateStr.includes('/')) {
+                            const parts = dateStr.split('/');
+                            const year = parseInt(parts[0]);
+                            const month = parseInt(parts[1]) || 1;
+                            const day = parseInt(parts[2]) || 1;
+                            return new Date(year, month - 1, day);
+                        }
+                        // "2024" 형식 (년도만)
+                        else if (dateStr.length === 4) {
+                            const year = parseInt(dateStr);
+                            return new Date(year, 0, 1); // 1월 1일로 설정
+                        }
+                    } catch (e) {
+                        console.log('날짜 파싱 오류:', dateStr, e);
+                    }
+                    return null;
+                };
+                
+                // 날짜 정규화: epubdate(온라인 공개일)를 우선 사용
+                // Epub ahead of print 논문은 pubdate가 미래일 수 있지만, epubdate는 실제 공개일
+                papers = papers.map(paper => {
+                    const pubDate = paper.pubdate || '';
+                    const epubDate = paper.epubdate || '';
+                    
+                    // epubdate가 있으면 우선 사용 (실제 온라인 공개일)
+                    // pubdate는 인쇄 예정일일 수 있어서 epubdate가 더 정확함
+                    if (epubDate) {
+                        paper.pubdate = epubDate; // 표시용 날짜로 epubdate 사용
+                    }
+                    // epubdate가 없으면 pubdate 사용
+                    
+                    return paper;
+                });
+                
+                // 인용 수 기준 알림 체크
+                checkCitationAlerts(papers);
+                
                 // 논문 정렬 및 분류
-                // 인기 논문: 인용 수가 10회 이상인 논문만 (공신력 있는 논문)
-                const papersWithCitations = papers.filter(p => p.citationCount && p.citationCount >= 10);
+                // 인기 논문: 지난 5년 내 논문 중 인용 수가 있는 것 (인용 수 높은 순)
+                const papersWithCitations = papers.filter(p => {
+                    // 인용 수가 있어야 함 (최소 1회 이상)
+                    const citationCount = p.citationCount || 0;
+                    if (citationCount < 1) return false;
+                    
+                    // 날짜 추출
+                    const pubDate = p.pubdate || p.sortpubdate || p.epubdate || '';
+                    if (!pubDate) return false;
+                    
+                    // 년도 추출
+                    let paperYear = null;
+                    if (pubDate.includes(' ')) {
+                        paperYear = parseInt(pubDate.split(' ')[0]);
+                    } else if (pubDate.includes('/')) {
+                        paperYear = parseInt(pubDate.split('/')[0]);
+                    } else if (pubDate.length === 4) {
+                        paperYear = parseInt(pubDate);
+                    }
+                    
+                    // 지난 5년 내 논문만 (미래 날짜도 포함 - Epub ahead of print 포함)
+                    if (paperYear && paperYear >= fiveYearsAgo && paperYear <= currentYear + 1) {
+                        // 현재 년도 + 1년까지 포함 (예정된 출판일 포함)
+                        return true;
+                    }
+                    return false;
+                });
+                
+                // 디버깅: 인용 수 정보 확인
+                console.log('전체 논문 수:', papers.length);
+                console.log('인용 수가 있는 논문:', papers.filter(p => p.citationCount && p.citationCount > 0).length);
+                console.log('인용 수 샘플:', papers.slice(0, 5).map(p => ({ title: p.title?.substring(0, 30), citations: p.citationCount })));
+                
+                // 인용 수 높은 순으로 정렬 (인용 수가 많은 것 우선)
                 const popularPapers = [...papersWithCitations]
-                    .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
+                    .sort((a, b) => {
+                        const citationA = a.citationCount || 0;
+                        const citationB = b.citationCount || 0;
+                        if (citationB !== citationA) {
+                            return citationB - citationA; // 인용 수 내림차순
+                        }
+                        // 인용 수가 같으면 최신순
+                        const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
+                        const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
+                        return dateB.localeCompare(dateA);
+                    })
                     .slice(0, 10);
                 
-                // 최신 논문 정렬 (날짜 기준)
-                const recentPapers = [...papers].sort((a, b) => {
-                    const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
-                    const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
-                    if (!dateA && !dateB) return 0;
-                    if (!dateA) return 1;
-                    if (!dateB) return -1;
-                    return dateB.localeCompare(dateA);
-                }).slice(0, 10);
+                // 최신 논문 정렬 (날짜 기준, 최신순, 미래 날짜 포함)
+                const recentPapers = [...papers]
+                    .filter(paper => {
+                        // 최근 2년 내 논문만 (과거 논문 제외)
+                        const pubDate = paper.pubdate || paper.sortpubdate || paper.epubdate || '';
+                        if (!pubDate) return false;
+                        
+                        const paperDate = parsePaperDate(pubDate);
+                        if (!paperDate) return false;
+                        
+                        // 2년 전부터 미래까지 포함
+                        const twoYearsAgoDate = new Date();
+                        twoYearsAgoDate.setFullYear(twoYearsAgoDate.getFullYear() - 2);
+                        
+                        return paperDate >= twoYearsAgoDate;
+                    })
+                    .sort((a, b) => {
+                        const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
+                        const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
+                        if (!dateA && !dateB) return 0;
+                        if (!dateA) return 1;
+                        if (!dateB) return -1;
+                        
+                        // 날짜 파싱하여 비교
+                        const dateAObj = parsePaperDate(dateA);
+                        const dateBObj = parsePaperDate(dateB);
+                        
+                        if (!dateAObj && !dateBObj) return 0;
+                        if (!dateAObj) return 1;
+                        if (!dateBObj) return -1;
+                        
+                        // 최신순 (날짜 내림차순)
+                        return dateBObj - dateAObj;
+                    })
+                    .slice(0, 10);
 
                 // 논문 카드 생성 함수
                 const createPaperCard = (paper) => {
@@ -633,16 +869,42 @@
                     `;
                 };
 
-                // 인기 논문 목록 표시 (인용 10회 이상만)
+                // 인기 논문 목록 표시 (지난 5년 내, 인용 수 높은 순)
                 if (popularPapers.length > 0) {
                     popularPapersList.innerHTML = popularPapers.map(createPaperCard).join('');
                 } else {
-                    popularPapersList.innerHTML = `
-                        <div class="empty-state">
-                            <p>인용 수 10회 이상인 인기 논문이 없습니다.</p>
-                            <p style="margin-top: 10px; font-size: 0.9em;">최신 논문 섹션을 확인해보세요.</p>
-                        </div>
-                    `;
+                    // 인용 수 정보가 없는 경우, 최신 논문 중 일부를 인기 논문으로 표시
+                    const fallbackPapers = [...papers]
+                        .filter(p => {
+                            const pubDate = p.pubdate || p.sortpubdate || p.epubdate || '';
+                            if (!pubDate) return false;
+                            let paperYear = null;
+                            if (pubDate.includes(' ')) {
+                                paperYear = parseInt(pubDate.split(' ')[0]);
+                            } else if (pubDate.includes('/')) {
+                                paperYear = parseInt(pubDate.split('/')[0]);
+                            } else if (pubDate.length === 4) {
+                                paperYear = parseInt(pubDate);
+                            }
+                            return paperYear && paperYear >= fiveYearsAgo && paperYear <= currentYear;
+                        })
+                        .slice(0, 5);
+                    
+                    if (fallbackPapers.length > 0) {
+                        popularPapersList.innerHTML = `
+                            <div class="empty-state" style="margin-bottom: 20px;">
+                                <p style="color: #999; font-size: 0.9em;">인용 수 정보를 가져올 수 없어 최신 논문을 표시합니다.</p>
+                            </div>
+                            ${fallbackPapers.map(createPaperCard).join('')}
+                        `;
+                    } else {
+                        popularPapersList.innerHTML = `
+                            <div class="empty-state">
+                                <p>지난 5년 내 인기 논문이 없습니다.</p>
+                                <p style="margin-top: 10px; font-size: 0.9em;">최신 논문 섹션을 확인해보세요.</p>
+                            </div>
+                        `;
+                    }
                 }
 
                 // 최신 논문 목록 표시
@@ -718,6 +980,88 @@
         function updateStats() {
             document.getElementById('alertCount').textContent = alerts.length;
             document.getElementById('paperCount').textContent = savedPapers.length;
+        }
+
+        // 인용 수 기준 알림 체크
+        function checkCitationAlerts(papers) {
+            if (alerts.length === 0) return;
+            
+            alerts.forEach(alert => {
+                if (!alert.minCitations || alert.minCitations <= 0) return;
+                
+                // 해당 알림의 키워드와 일치하고, 인용 수 기준을 만족하는 논문 찾기
+                const matchingPapers = papers.filter(paper => {
+                    // 키워드 매칭
+                    const title = (paper.title || '').toLowerCase();
+                    const matchesKeyword = alert.keywords.some(keyword => 
+                        title.includes(keyword.toLowerCase())
+                    );
+                    
+                    if (!matchesKeyword) return false;
+                    
+                    // 인용 수 기준 확인
+                    const citationCount = paper.citationCount || 0;
+                    return citationCount >= alert.minCitations;
+                });
+                
+                // 조건을 만족하는 논문이 있으면 알림
+                if (matchingPapers.length > 0) {
+                    const paperTitles = matchingPapers.slice(0, 3).map(p => p.title || '제목 없음').join(', ');
+                    const moreCount = matchingPapers.length > 3 ? ` 외 ${matchingPapers.length - 3}개` : '';
+                    
+                    // 브라우저 알림 (사용자가 허용한 경우)
+                    if ('Notification' in window && Notification.permission === 'granted') {
+                        new Notification('📚 인용 수 기준 논문 발견!', {
+                            body: `${matchingPapers.length}개의 논문이 인용 수 ${alert.minCitations}회 이상입니다.`,
+                            icon: '📚'
+                        });
+                    } else if (Notification.permission !== 'denied') {
+                        Notification.requestPermission().then(permission => {
+                            if (permission === 'granted') {
+                                new Notification('📚 인용 수 기준 논문 발견!', {
+                                    body: `${matchingPapers.length}개의 논문이 인용 수 ${alert.minCitations}회 이상입니다.`,
+                                    icon: '📚'
+                                });
+                            }
+                        });
+                    }
+                    
+                    // 페이지 내 알림 표시
+                    showCitationAlert(matchingPapers.length, alert.minCitations, paperTitles + moreCount);
+                }
+            });
+        }
+        
+        // 인용 수 알림 표시
+        function showCitationAlert(count, minCitations, titles) {
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 400px;
+                animation: slideIn 0.3s ease-out;
+            `;
+            alertDiv.innerHTML = `
+                <h3 style="margin-bottom: 10px;">📚 인용 수 기준 논문 발견!</h3>
+                <p style="margin-bottom: 5px;">${count}개의 논문이 인용 수 ${minCitations}회 이상입니다.</p>
+                <p style="font-size: 0.9em; opacity: 0.9;">${titles}</p>
+                <button onclick="this.parentElement.remove()" style="margin-top: 10px; padding: 5px 15px; background: white; color: #667eea; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">닫기</button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            // 10초 후 자동 제거
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 10000);
         }
 
         // XSS 방지
