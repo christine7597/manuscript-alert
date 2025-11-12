@@ -324,7 +324,7 @@
                 </div>
                 
                 <div style="margin-bottom: 30px;">
-                    <h3 style="color: #667eea; margin-bottom: 15px; font-size: 1.3em;">🔥 인기 논문 (인용 수 높은 순)</h3>
+                    <h3 style="color: #667eea; margin-bottom: 15px; font-size: 1.3em;">🔥 인기 논문 (인용 10회 이상, 인용 수 높은 순)</h3>
                     <div id="popularPapersList">
                         <div class="empty-state">
                             <p>논문을 검색하려면 알림을 설정하세요.</p>
@@ -548,9 +548,11 @@
                 papers = await Promise.all(semanticPromises);
 
                 // 논문 정렬 및 분류
-                // 인용 수가 있는 논문만 필터링하고 정렬
-                const papersWithCitations = papers.filter(p => p.citationCount && p.citationCount > 0);
-                const popularPapers = [...papersWithCitations].sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0)).slice(0, 10);
+                // 인기 논문: 인용 수가 10회 이상인 논문만 (공신력 있는 논문)
+                const papersWithCitations = papers.filter(p => p.citationCount && p.citationCount >= 10);
+                const popularPapers = [...papersWithCitations]
+                    .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
+                    .slice(0, 10);
                 
                 // 최신 논문 정렬 (날짜 기준)
                 const recentPapers = [...papers].sort((a, b) => {
@@ -631,13 +633,14 @@
                     `;
                 };
 
-                // 인기 논문 목록 표시
+                // 인기 논문 목록 표시 (인용 10회 이상만)
                 if (popularPapers.length > 0) {
                     popularPapersList.innerHTML = popularPapers.map(createPaperCard).join('');
                 } else {
                     popularPapersList.innerHTML = `
                         <div class="empty-state">
-                            <p>인용 수 정보가 있는 논문이 없습니다.</p>
+                            <p>인용 수 10회 이상인 인기 논문이 없습니다.</p>
+                            <p style="margin-top: 10px; font-size: 0.9em;">최신 논문 섹션을 확인해보세요.</p>
                         </div>
                     `;
                 }
