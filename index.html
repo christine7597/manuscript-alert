@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Psychology Paper Alert - Manuscript Alert</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .search-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .papers-section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+            margin-right: 10px;
+        }
+
+        .btn-danger {
+            background: #ff4757;
+            color: white;
+        }
+
+        .alert-item {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .alert-item .keywords {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .alert-item .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .paper-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+            transition: transform 0.2s;
+        }
+
+        .paper-card:hover {
+            transform: translateX(5px);
+        }
+
+        .paper-card h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .paper-card .authors {
+            color: #666;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .paper-card .journal {
+            color: #667eea;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .paper-card .date {
+            color: #999;
+            font-size: 0.85em;
+            margin-bottom: 10px;
+        }
+
+        .paper-card .abstract {
+            color: #666;
+            font-size: 0.9em;
+            line-height: 1.5;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+
+        .paper-card a {
+            color: #0077b5;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .paper-card a:hover {
+            text-decoration: underline;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            flex: 1;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+
+        .stat-card p {
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #667eea;
+            font-size: 1.1em;
+        }
+
+        .loading::after {
+            content: '...';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60%, 100% { content: '...'; }
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .tag {
+            display: inline-block;
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 Psychology Paper Alert</h1>
+            <p>심리학 논문을 실시간으로 추적하고 알림을 받으세요</p>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <h3 id="alertCount">0</h3>
+                <p>활성 알림</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="paperCount">0</h3>
+                <p>저장된 논문</p>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="search-section">
+                <h2 style="margin-bottom: 20px; color: #333;">알림 설정</h2>
+                
+                <form id="alertForm">
+                    <div class="form-group">
+                        <label for="keywords">키워드 (쉼표로 구분) *</label>
+                        <input type="text" id="keywords" placeholder="예: depression, anxiety, therapy" required>
+                        <small style="color: #666; font-size: 0.85em; margin-top: 5px; display: block;">
+                            관심 있는 심리학 키워드를 입력하세요
+                        </small>
+                    </div>
+                    <button type="submit" class="btn btn-primary">알림 추가</button>
+                </form>
+
+                <div style="margin-top: 30px;">
+                    <h3 style="margin-bottom: 15px; color: #333;">활성 알림</h3>
+                    <div id="alertsList">
+                        <div class="empty-state">
+                            <p>설정된 알림이 없습니다.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="papers-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2 style="color: #333;">발견된 논문</h2>
+                    <button class="btn btn-secondary" onclick="searchPapers()">새로고침</button>
+                </div>
+                
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: #667eea; margin-bottom: 15px; font-size: 1.3em;">🔥 인기 논문 (인용 수 높은 순)</h3>
+                    <div id="popularPapersList">
+                        <div class="empty-state">
+                            <p>논문을 검색하려면 알림을 설정하세요.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 style="color: #667eea; margin-bottom: 15px; font-size: 1.3em;">🆕 최신 논문</h3>
+                    <div id="recentPapersList">
+                        <div class="empty-state">
+                            <p>논문을 검색하려면 알림을 설정하세요.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 데이터 저장소
+        let alerts = JSON.parse(localStorage.getItem('paperAlerts')) || [];
+        let savedPapers = JSON.parse(localStorage.getItem('savedPapers')) || [];
+
+        // 페이지 로드 시
+        function loadData() {
+            displayAlerts();
+            updateStats();
+            if (alerts.length > 0) {
+                searchPapers();
+            }
+        }
+
+        // 알림 목록 표시
+        function displayAlerts() {
+            const alertsList = document.getElementById('alertsList');
+            
+            if (alerts.length === 0) {
+                alertsList.innerHTML = `
+                    <div class="empty-state">
+                        <p>설정된 알림이 없습니다.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            alertsList.innerHTML = alerts.map((alert, index) => `
+                <div class="alert-item">
+                    <div>
+                        <div class="keywords">${alert.keywords.map(k => `<span class="tag">${escapeHtml(k)}</span>`).join('')}</div>
+                        <small style="color: #666;">${alert.createdAt ? new Date(alert.createdAt).toLocaleDateString('ko-KR') : ''}</small>
+                    </div>
+                    <div class="actions">
+                        <button class="btn btn-danger" onclick="deleteAlert(${index})">삭제</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 알림 추가
+        document.getElementById('alertForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const keywordsInput = document.getElementById('keywords').value.trim();
+            if (!keywordsInput) {
+                alert('키워드를 입력해주세요.');
+                return;
+            }
+
+            const keywords = keywordsInput.split(',').map(k => k.trim()).filter(k => k);
+            
+            const newAlert = {
+                id: Date.now().toString(),
+                keywords: keywords,
+                createdAt: new Date().toISOString()
+            };
+
+            alerts.push(newAlert);
+            localStorage.setItem('paperAlerts', JSON.stringify(alerts));
+            
+            document.getElementById('alertForm').reset();
+            displayAlerts();
+            updateStats();
+            searchPapers();
+        });
+
+        // 알림 삭제
+        function deleteAlert(index) {
+            if (confirm('이 알림을 삭제하시겠습니까?')) {
+                alerts.splice(index, 1);
+                localStorage.setItem('paperAlerts', JSON.stringify(alerts));
+                displayAlerts();
+                updateStats();
+                if (alerts.length === 0) {
+                    document.getElementById('popularPapersList').innerHTML = `
+                        <div class="empty-state">
+                            <p>논문을 검색하려면 알림을 설정하세요.</p>
+                        </div>
+                    `;
+                    document.getElementById('recentPapersList').innerHTML = `
+                        <div class="empty-state">
+                            <p>논문을 검색하려면 알림을 설정하세요.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // 논문 검색
+        async function searchPapers() {
+            if (alerts.length === 0) {
+                return;
+            }
+
+            const popularPapersList = document.getElementById('popularPapersList');
+            const recentPapersList = document.getElementById('recentPapersList');
+            popularPapersList.innerHTML = '<div class="loading"><div class="spinner"></div>논문을 검색하는 중</div>';
+            recentPapersList.innerHTML = '';
+
+            try {
+                // 모든 알림의 키워드를 합쳐서 검색
+                const allKeywords = [...new Set(alerts.flatMap(a => a.keywords))];
+                const searchQuery = allKeywords.join(' OR ');
+
+                // 최근 2년 내 논문만 검색
+                const twoYearsAgo = new Date();
+                twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+                const yearFrom = twoYearsAgo.getFullYear();
+                const today = new Date();
+                const yearTo = today.getFullYear();
+
+                // PubMed API 사용 - 실제 발행된 논문만 (더 신뢰할 수 있는 데이터)
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                // PubMed API: 최근 2년, 심리학 관련, 실제 발행된 논문만
+                const pubmedQuery = `${searchQuery} AND (${yearFrom}[PDAT] : ${yearTo}[PDAT]) AND psychology[MeSH Terms]`;
+                const response = await fetch(
+                    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(pubmedQuery)}&retmax=15&retmode=json&sort=pub_date`,
+                    {
+                        headers: {
+                            'Accept': 'application/json'
+                        },
+                        signal: controller.signal
+                    }
+                );
+                
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error('API 요청 실패');
+                }
+
+                const searchData = await response.json();
+                const pmids = searchData.esearchresult?.idlist || [];
+
+                if (pmids.length === 0) {
+                    popularPapersList.innerHTML = `
+                        <div class="empty-state">
+                            <p>검색된 논문이 없습니다.</p>
+                            <p style="margin-top: 10px; font-size: 0.9em;">다른 키워드로 시도해보세요.</p>
+                        </div>
+                    `;
+                    recentPapersList.innerHTML = '';
+                    return;
+                }
+
+                // 논문 상세 정보 가져오기
+                const detailResponse = await fetch(
+                    `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${pmids.join(',')}&retmode=json`,
+                    {
+                        signal: controller.signal
+                    }
+                );
+
+                if (!detailResponse.ok) {
+                    throw new Error('상세 정보 요청 실패');
+                }
+
+                const detailData = await detailResponse.json();
+                let papers = Object.values(detailData.result || {}).filter(p => p.uid !== '');
+
+                // Semantic Scholar API로 추가 정보 가져오기 (요약, 인용 등)
+                // PubMed 제목으로 Semantic Scholar 검색
+                const semanticPromises = papers.slice(0, 10).map(async (paper) => {
+                    try {
+                        const title = paper.title || '';
+                        if (!title) return paper;
+                        
+                        // Semantic Scholar API (무료, API 키 불필요)
+                        const semanticResponse = await fetch(
+                            `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&limit=1&fields=abstract,citationCount,year`,
+                            {
+                                headers: {
+                                    'Accept': 'application/json'
+                                },
+                                signal: controller.signal
+                            }
+                        );
+                        
+                        if (semanticResponse.ok) {
+                            const semanticData = await semanticResponse.json();
+                            if (semanticData.data && semanticData.data.length > 0) {
+                                const semanticPaper = semanticData.data[0];
+                                // Semantic Scholar 정보 병합
+                                paper.abstract = semanticPaper.abstract || '';
+                                paper.citationCount = semanticPaper.citationCount || 0;
+                                if (semanticPaper.year && !paper.pubdate) {
+                                    paper.pubdate = semanticPaper.year.toString();
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Semantic Scholar 실패해도 PubMed 데이터는 사용
+                        console.log('Semantic Scholar API 오류:', e);
+                    }
+                    return paper;
+                });
+
+                // 모든 Semantic Scholar 요청 완료 대기
+                papers = await Promise.all(semanticPromises);
+
+                // 논문 정렬 및 분류
+                // 인용 수가 있는 논문만 필터링하고 정렬
+                const papersWithCitations = papers.filter(p => p.citationCount && p.citationCount > 0);
+                const popularPapers = [...papersWithCitations].sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0)).slice(0, 10);
+                
+                // 최신 논문 정렬 (날짜 기준)
+                const recentPapers = [...papers].sort((a, b) => {
+                    const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
+                    const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
+                    if (!dateA && !dateB) return 0;
+                    if (!dateA) return 1;
+                    if (!dateB) return -1;
+                    return dateB.localeCompare(dateA);
+                }).slice(0, 10);
+
+                // 논문 카드 생성 함수
+                const createPaperCard = (paper) => {
+                    const title = paper.title || '제목 없음';
+                    const authors = paper.authors ? paper.authors.map(a => a.name || '').filter(n => n).join(', ') : '저자 정보 없음';
+                    const journal = paper.source || '';
+                    
+                    // 날짜 정보 추출 (여러 필드 확인)
+                    let pubDate = paper.pubdate || paper.sortpubdate || paper.epubdate || '';
+                    let date = '날짜 정보 없음';
+                    let year = '';
+                    
+                    if (pubDate) {
+                        // PubMed 날짜 형식: "2024 Jan 15" 또는 "2024/01/15" 또는 "2024"
+                        if (pubDate.includes(' ')) {
+                            // "2024 Jan 15" 형식
+                            const parts = pubDate.split(' ');
+                            year = parts[0] || '';
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const month = parts[1] ? (monthNames.indexOf(parts[1]) + 1) : '';
+                            const day = parts[2] || '';
+                            if (year && month && day) {
+                                date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                            } else if (year && month) {
+                                date = `${year}-${String(month).padStart(2, '0')}`;
+                            } else if (year) {
+                                date = year;
+                            }
+                        } else if (pubDate.includes('/')) {
+                            // "2024/01/15" 형식
+                            const parts = pubDate.split('/');
+                            year = parts[0] || '';
+                            date = pubDate;
+                        } else if (pubDate.length === 4) {
+                            // "2024" 형식
+                            year = pubDate;
+                            date = year;
+                        } else {
+                            date = pubDate;
+                            year = pubDate.substring(0, 4);
+                        }
+                    }
+                    
+                    const pmid = paper.uid || '';
+                    const pmidUrl = pmid ? `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` : '';
+                    const abstract = paper.abstract || '';
+                    const citationCount = paper.citationCount || 0;
+                    
+                    // 최신 논문 표시 (1년 이내)
+                    let dateBadge = '';
+                    if (year) {
+                        const paperYear = parseInt(year);
+                        const currentYear = new Date().getFullYear();
+                        if (paperYear === currentYear || paperYear === currentYear - 1) {
+                            dateBadge = '<span style="background: #4caf50; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75em; margin-left: 8px;">최신</span>';
+                        }
+                    }
+
+                    return `
+                        <div class="paper-card">
+                            <h3>${escapeHtml(title)}${dateBadge}</h3>
+                            <div class="authors">${escapeHtml(authors)}</div>
+                            ${journal ? `<div class="journal">📖 ${escapeHtml(journal)}</div>` : ''}
+                            <div class="date">📅 ${date}${citationCount > 0 ? ` | 인용: ${citationCount}회` : ''}</div>
+                            ${abstract ? `<div class="abstract" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">${escapeHtml(abstract.substring(0, 200))}${abstract.length > 200 ? '...' : ''}</div>` : ''}
+                            ${pmidUrl ? `<div style="margin-top: 10px;"><a href="${pmidUrl}" target="_blank">논문 보기 (PubMed)</a></div>` : ''}
+                        </div>
+                    `;
+                };
+
+                // 인기 논문 목록 표시
+                if (popularPapers.length > 0) {
+                    popularPapersList.innerHTML = popularPapers.map(createPaperCard).join('');
+                } else {
+                    popularPapersList.innerHTML = `
+                        <div class="empty-state">
+                            <p>인용 수 정보가 있는 논문이 없습니다.</p>
+                        </div>
+                    `;
+                }
+
+                // 최신 논문 목록 표시
+                if (recentPapers.length > 0) {
+                    recentPapersList.innerHTML = recentPapers.map(createPaperCard).join('');
+                } else {
+                    recentPapersList.innerHTML = `
+                        <div class="empty-state">
+                            <p>최신 논문이 없습니다.</p>
+                        </div>
+                    `;
+                }
+
+                // 저장된 논문 업데이트
+                savedPapers = papers.map(paper => {
+                    const pubDate = paper.pubdate || paper.sortpubdate || paper.epubdate || '';
+                    let formattedDate = '';
+                    
+                    if (pubDate) {
+                        if (pubDate.includes(' ')) {
+                            const parts = pubDate.split(' ');
+                            const year = parts[0] || '';
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const month = parts[1] ? (monthNames.indexOf(parts[1]) + 1) : '';
+                            const day = parts[2] || '';
+                            if (year && month && day) {
+                                formattedDate = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                            } else if (year && month) {
+                                formattedDate = `${year}-${String(month).padStart(2, '0')}`;
+                            } else {
+                                formattedDate = year || pubDate;
+                            }
+                        } else {
+                            formattedDate = pubDate;
+                        }
+                    }
+                    
+                    return {
+                        id: paper.uid || Date.now().toString(),
+                        title: paper.title || '',
+                        authors: paper.authors ? paper.authors.map(a => a.name || '').filter(n => n).join(', ') : '',
+                        journal: paper.source || '',
+                        date: formattedDate || pubDate || '',
+                        doi: '',
+                        pmid: paper.uid || '',
+                        savedAt: new Date().toISOString()
+                    };
+                });
+                localStorage.setItem('savedPapers', JSON.stringify(savedPapers));
+                updateStats();
+
+            } catch (error) {
+                console.error('Error:', error);
+                if (error.name === 'AbortError') {
+                    papersList.innerHTML = `
+                        <div class="empty-state">
+                            <p>요청 시간이 초과되었습니다.</p>
+                            <p style="margin-top: 10px; font-size: 0.9em;">다시 시도해주세요.</p>
+                        </div>
+                    `;
+                } else {
+                    papersList.innerHTML = `
+                        <div class="empty-state">
+                            <p>논문을 가져오는 중 오류가 발생했습니다.</p>
+                            <p style="margin-top: 10px; font-size: 0.9em;">잠시 후 다시 시도해주세요.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        // 통계 업데이트
+        function updateStats() {
+            document.getElementById('alertCount').textContent = alerts.length;
+            document.getElementById('paperCount').textContent = savedPapers.length;
+        }
+
+        // XSS 방지
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 초기 로드
+        loadData();
+    </script>
+</body>
+</html>
+
