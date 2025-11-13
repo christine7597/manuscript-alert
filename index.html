@@ -753,74 +753,142 @@
                 papers = [...processedPapers, ...remainingPapers];
 
                 // 인용 수가 높은 논문 우선 정렬 (오래된 논문도 포함)
-                let popularPapers = papers
+                // 인용 수가 있는 논문 우선 선택
+                const papersWithCitations = papers
                     .filter(p => {
-                        // 인용 수가 있는 논문 우선
                         const citationCount = p.citationCount || 0;
-                        return citationCount > 0; // 최소 1회 이상 인용된 논문
+                        return citationCount > 0;
                     })
                     .sort((a, b) => {
                         const citationA = a.citationCount || 0;
                         const citationB = b.citationCount || 0;
-                        // 인용 수가 높은 순
                         if (citationB !== citationA) {
                             return citationB - citationA;
                         }
-                        // 인용 수가 같으면 최신순
                         const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
                         const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
                         return dateB.localeCompare(dateA);
                     })
                     .slice(0, 10);
 
-                // 인용 수가 있는 논문이 적으면 (5개 미만), 최신 논문 중 일부를 추가
-                if (popularPapers.length < 5) {
-                    const recentPapers = papers
+                // 인용 수가 없는 논문 중에서 최신 논문 선택 (fallback)
+                const recentPapers = papers
+                    .filter(p => {
+                        const citationCount = p.citationCount || 0;
+                        if (citationCount > 0) return false; // 이미 포함된 논문 제외
+                        const pubDate = p.pubdate || p.sortpubdate || p.epubdate || '';
+                        return pubDate && pubDate.length > 0;
+                    })
+                    .sort((a, b) => {
+                        const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
+                        const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
+                        return dateB.localeCompare(dateA);
+                    })
+                    .slice(0, 10);
+
+                // 인용 수가 있는 논문과 최신 논문 결합 (항상 최소 10개 보장)
+                const existingIds = new Set(papersWithCitations.map(p => p.uid || ''));
+                const additional = recentPapers.filter(p => !existingIds.has(p.uid || ''));
+                let popularPapers = [...papersWithCitations, ...additional].slice(0, 10);
+
+                // 여전히 논문이 없으면 모든 논문 중 최신순으로 선택 (최후의 수단)
+                if (popularPapers.length === 0 && papers.length > 0) {
+                    popularPapers = papers
                         .filter(p => {
-                            // 인용 수가 없는 논문 중에서
-                            const citationCount = p.citationCount || 0;
-                            if (citationCount > 0) return false; // 이미 포함된 논문 제외
-                            
-                            // 날짜가 있는 논문만
                             const pubDate = p.pubdate || p.sortpubdate || p.epubdate || '';
                             return pubDate && pubDate.length > 0;
                         })
                         .sort((a, b) => {
-                            // 최신순
                             const dateA = a.pubdate || a.sortpubdate || a.epubdate || '';
                             const dateB = b.pubdate || b.sortpubdate || b.epubdate || '';
                             return dateB.localeCompare(dateA);
                         })
-                        .slice(0, 10 - popularPapers.length);
-                    
-                    // 중복 제거
-                    const existingIds = new Set(popularPapers.map(p => p.uid || ''));
-                    const additional = recentPapers.filter(p => !existingIds.has(p.uid || ''));
-                    popularPapers = [...popularPapers, ...additional].slice(0, 10);
+                        .slice(0, 10);
                 }
 
-                // 최소 1개 이상의 논문이 있으면 캐시에 저장하고 표시
+                // 논문이 있으면 항상 표시 (인용 수가 없어도)
                 if (popularPapers.length > 0) {
                     try {
                         localStorage.setItem('cachedPopularPapers', JSON.stringify(popularPapers));
                         localStorage.setItem('cachedPopularPapersTime', now.toString());
-                        displayPopularPapers(popularPapers);
+                        
+                        // 인용 수가 없는 논문이 포함되어 있으면 안내 메시지 추가
+                        const hasNoCitations = popularPapers.some(p => !p.citationCount || p.citationCount === 0);
+                        if (hasNoCitations && papersWithCitations.length === 0) {
+                            popularPapersList.innerHTML = `
+                                <div style="padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107; margin-bottom: 20px;">
+                                    <p style="color: #856404; font-size: 0.9em; margin: 0;">
+                                        💡 인용 수 정보를 가져올 수 없어 최신 논문을 인기 논문으로 표시합니다.
+                                    </p>
+                                </div>
+                            `;
+                            displayPopularPapers(popularPapers);
+                        } else {
+                            displayPopularPapers(popularPapers);
+                        }
                     } catch (e) {
                         console.error('캐시 저장 실패:', e);
-                        displayPopularPapers(popularPapers); // 캐시 저장 실패해도 표시는 함
+                        displayPopularPapers(popularPapers);
                     }
                 } else {
-                    // 논문이 없으면 안내 메시지
+                    // 정말 논문이 하나도 없을 때만 안내 메시지
                     popularPapersList.innerHTML = `
                         <div class="empty-state">
-                            <p>인용 수 정보가 있는 인기 논문을 찾을 수 없습니다.</p>
-                            <p style="margin-top: 10px; font-size: 0.9em;">다른 키워드로 검색하거나 나중에 다시 시도해주세요.</p>
+                            <p>검색된 논문이 없습니다.</p>
+                            <p style="margin-top: 10px; font-size: 0.9em;">다른 키워드로 검색해보세요.</p>
                         </div>
                     `;
                 }
 
             } catch (error) {
                 console.error('인기 논문 검색 오류:', error);
+                
+                // 에러 발생 시에도 최신 논문 검색 시도 (간단한 방법)
+                try {
+                    const allKeywords = [...new Set(alerts.flatMap(a => a.keywords))];
+                    const searchQuery = allKeywords.join(' OR ');
+                    const fiveYearsAgo = new Date();
+                    fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+                    const yearFrom5 = fiveYearsAgo.getFullYear();
+                    const yearTo = new Date().getFullYear() + 1;
+                    
+                    const fallbackResponse = await fetch(
+                        `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term=${encodeURIComponent(searchQuery + ' AND (' + yearFrom5 + '[PDAT] : ' + yearTo + '[PDAT])')}&retmax=20&retmode=json&sort=pub_date`,
+                        {
+                            headers: { 'Accept': 'application/json' }
+                        }
+                    );
+                    
+                    if (fallbackResponse.ok) {
+                        const fallbackData = await fallbackResponse.json();
+                        const fallbackPmids = fallbackData.esearchresult?.idlist || [];
+                        
+                        if (fallbackPmids.length > 0) {
+                            const fallbackDetailResponse = await fetch(
+                                `https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id=${fallbackPmids.join(',')}&retmode=json`
+                            );
+                            
+                            if (fallbackDetailResponse.ok) {
+                                const fallbackDetailData = await fallbackDetailResponse.json();
+                                const fallbackPapers = Object.values(fallbackDetailData.result || {}).filter(p => p.uid !== '');
+                                
+                                if (fallbackPapers.length > 0) {
+                                    popularPapersList.innerHTML = `
+                                        <div style="padding: 15px; background: #fff3cd; border-radius: 8px; border-left: 4px solid #ffc107; margin-bottom: 20px;">
+                                            <p style="color: #856404; font-size: 0.9em; margin: 0;">
+                                                ⚠️ 인용 수 정보를 가져올 수 없어 최신 논문을 인기 논문으로 표시합니다.
+                                            </p>
+                                        </div>
+                                    `;
+                                    displayPopularPapers(fallbackPapers.slice(0, 10));
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                } catch (fallbackError) {
+                    console.error('Fallback 검색도 실패:', fallbackError);
+                }
                 
                 // 캐시된 데이터가 있으면 그것을 표시
                 const cachedPopular = localStorage.getItem('cachedPopularPapers');
@@ -843,12 +911,15 @@
                     }
                 }
                 
-                // 캐시도 없으면 에러 메시지
+                // 모든 방법이 실패했을 때만 에러 메시지
                 popularPapersList.innerHTML = `
                     <div class="empty-state">
                         <p>인기 논문을 가져오는 중 오류가 발생했습니다.</p>
                         <p style="margin-top: 10px; font-size: 0.9em;">${error.message || '알 수 없는 오류'}</p>
                         <p style="margin-top: 10px; font-size: 0.9em;">잠시 후 다시 시도해주세요.</p>
+                        <button onclick="searchPopularPapers()" style="margin-top: 15px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            다시 시도
+                        </button>
                     </div>
                 `;
             }
@@ -861,7 +932,7 @@
             if (papers.length === 0) {
                 popularPapersList.innerHTML = `
                     <div class="empty-state">
-                        <p>인용 수 정보가 있는 인기 논문이 없습니다.</p>
+                        <p>표시할 논문이 없습니다.</p>
                     </div>
                 `;
                 return;
@@ -878,19 +949,30 @@
                 const abstract = paper.abstract || '';
                 const citationCount = paper.citationCount || 0;
 
+                // 인용 수가 있으면 표시, 없으면 최신 논문임을 표시
+                const citationInfo = citationCount > 0 
+                    ? `🔥 인용: ${citationCount.toLocaleString()}회`
+                    : `📅 최신 논문`;
+
                 return `
                     <div class="paper-card">
                         <h3>${escapeHtml(title)}</h3>
                         <div class="authors">${escapeHtml(authors)}</div>
                         ${journal ? `<div class="journal">📖 ${escapeHtml(journal)}</div>` : ''}
-                        <div class="date">📅 ${date} | 🔥 인용: ${citationCount.toLocaleString()}회</div>
+                        <div class="date">📅 ${date} | ${citationInfo}</div>
                         ${abstract ? `<div class="abstract" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">${escapeHtml(abstract.substring(0, 200))}${abstract.length > 200 ? '...' : ''}</div>` : ''}
                         ${pmidUrl ? `<div style="margin-top: 10px;"><a href="${pmidUrl}" target="_blank">논문 보기 (PubMed)</a></div>` : ''}
                     </div>
                 `;
             };
 
-            popularPapersList.innerHTML = papers.map(createPaperCard).join('');
+            // 기존 내용에 추가 (이미 안내 메시지가 있을 수 있음)
+            const existingContent = popularPapersList.innerHTML;
+            if (existingContent.includes('empty-state') || existingContent.includes('loading')) {
+                popularPapersList.innerHTML = papers.map(createPaperCard).join('');
+            } else {
+                popularPapersList.innerHTML += papers.map(createPaperCard).join('');
+            }
         }
 
         // 논문 검색 (최신 논문용)
