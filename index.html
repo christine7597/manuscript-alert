@@ -223,6 +223,38 @@
             opacity: 0.9;
         }
 
+        .auto-update-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+            margin-left: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .last-update {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 10px;
+            text-align: center;
+        }
+
+        .new-paper-badge {
+            background: #ff4757;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            margin-left: 8px;
+            animation: pulse 1s infinite;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -348,8 +380,15 @@
 
             <div class="papers-section">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h2 style="color: #333;">발견된 논문</h2>
-                    <button class="btn btn-secondary" onclick="searchPapers()">새로고침</button>
+                    <h2 style="color: #333;">
+                        발견된 논문 
+                        <span class="auto-update-indicator" id="updateIndicator"></span>
+                        <span style="font-size: 0.7em; color: #666; font-weight: normal;">(30분마다 자동 업데이트)</span>
+                    </h2>
+                    <button class="btn btn-secondary" onclick="searchPapers()">지금 검색</button>
+                </div>
+                <div class="last-update" id="lastUpdate">
+                    마지막 업데이트: -
                 </div>
                 
                 <div style="margin-bottom: 30px;">
@@ -378,14 +417,61 @@
         // 데이터 저장소
         let alerts = JSON.parse(localStorage.getItem('paperAlerts')) || [];
         let savedPapers = JSON.parse(localStorage.getItem('savedPapers')) || [];
+        let lastSearchTime = localStorage.getItem('lastSearchTime') || null;
+        let lastPaperIds = JSON.parse(localStorage.getItem('lastPaperIds')) || [];
+        let autoUpdateInterval = null;
 
         // 페이지 로드 시
         function loadData() {
             displayAlerts();
             updateStats();
+            updateLastSearchTime();
             if (alerts.length > 0) {
                 searchPapers();
             }
+            // 자동 업데이트 시작
+            startAutoUpdate();
+        }
+
+        // 마지막 검색 시간 표시
+        function updateLastSearchTime() {
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            if (lastSearchTime) {
+                const lastDate = new Date(lastSearchTime);
+                const now = new Date();
+                const diffMinutes = Math.floor((now - lastDate) / (1000 * 60));
+                
+                if (diffMinutes < 1) {
+                    lastUpdateEl.textContent = `마지막 업데이트: 방금 전`;
+                } else if (diffMinutes < 60) {
+                    lastUpdateEl.textContent = `마지막 업데이트: ${diffMinutes}분 전`;
+                } else {
+                    const diffHours = Math.floor(diffMinutes / 60);
+                    lastUpdateEl.textContent = `마지막 업데이트: ${diffHours}시간 전`;
+                }
+            } else {
+                lastUpdateEl.textContent = `마지막 업데이트: 아직 검색하지 않음`;
+            }
+        }
+
+        // 자동 업데이트 시작
+        function startAutoUpdate() {
+            if (alerts.length === 0) {
+                return; // 알림이 없으면 자동 업데이트 안 함
+            }
+
+            // 기존 인터벌 제거
+            if (autoUpdateInterval) {
+                clearInterval(autoUpdateInterval);
+            }
+
+            // 30분마다 자동 검색
+            autoUpdateInterval = setInterval(() => {
+                if (alerts.length > 0) {
+                    console.log('자동 검색 실행...');
+                    searchPapers(true); // true = 자동 검색임을 표시
+                }
+            }, 30 * 60 * 1000); // 30분 = 30 * 60 * 1000ms
         }
 
         // 알림 목록 표시
@@ -440,6 +526,7 @@
             document.getElementById('alertForm').reset();
             displayAlerts();
             updateStats();
+            startAutoUpdate(); // 자동 업데이트 재시작
             searchPapers();
         });
 
@@ -477,6 +564,7 @@
             document.getElementById('citationAlertForm').reset();
             displayAlerts();
             updateStats();
+            startAutoUpdate(); // 자동 업데이트 재시작
             searchPapers();
         });
 
@@ -503,7 +591,7 @@
         }
 
         // 논문 검색
-        async function searchPapers() {
+        async function searchPapers(isAutoUpdate = false) {
             if (alerts.length === 0) {
                 return;
             }
@@ -918,6 +1006,13 @@
                     `;
                 }
 
+                // 현재 검색된 논문 ID 목록
+                const currentPaperIds = papers.map(p => p.uid || '').filter(id => id);
+                
+                // 새로운 논문 찾기 (이전 검색에 없던 논문)
+                const newPaperIds = currentPaperIds.filter(id => !lastPaperIds.includes(id));
+                const newPapers = papers.filter(p => newPaperIds.includes(p.uid || ''));
+                
                 // 저장된 논문 업데이트
                 savedPapers = papers.map(paper => {
                     const pubDate = paper.pubdate || paper.sortpubdate || paper.epubdate || '';
@@ -953,8 +1048,21 @@
                         savedAt: new Date().toISOString()
                     };
                 });
+                
+                // 마지막 검색 시간 및 논문 ID 저장
+                lastSearchTime = new Date().toISOString();
+                lastPaperIds = currentPaperIds;
                 localStorage.setItem('savedPapers', JSON.stringify(savedPapers));
+                localStorage.setItem('lastSearchTime', lastSearchTime);
+                localStorage.setItem('lastPaperIds', JSON.stringify(lastPaperIds));
+                
                 updateStats();
+                updateLastSearchTime();
+                
+                // 새로운 논문이 있으면 알림 표시
+                if (newPapers.length > 0 && (isAutoUpdate || lastPaperIds.length > 0)) {
+                    showNewPapersAlert(newPapers);
+                }
 
             } catch (error) {
                 console.error('Error:', error);
@@ -979,7 +1087,9 @@
         // 통계 업데이트
         function updateStats() {
             document.getElementById('alertCount').textContent = alerts.length;
-            document.getElementById('paperCount').textContent = savedPapers.length;
+            // 저장된 논문 수는 실제 검색된 논문 수로 표시 (고정된 10개가 아님)
+            const uniquePapers = [...new Map(savedPapers.map(p => [p.id, p])).values()];
+            document.getElementById('paperCount').textContent = uniquePapers.length;
         }
 
         // 인용 수 기준 알림 체크
@@ -1062,6 +1172,60 @@
                     alertDiv.remove();
                 }
             }, 10000);
+        }
+
+        // 새로운 논문 알림 표시
+        function showNewPapersAlert(newPapers) {
+            const count = newPapers.length;
+            const titles = newPapers.slice(0, 3).map(p => p.title || '제목 없음').join(', ');
+            const moreCount = newPapers.length > 3 ? ` 외 ${newPapers.length - 3}개` : '';
+            
+            // 브라우저 알림
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('🆕 새로운 논문 발견!', {
+                    body: `${count}개의 새로운 논문이 발견되었습니다.`,
+                    icon: '📚'
+                });
+            } else if (Notification.permission !== 'denied') {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        new Notification('🆕 새로운 논문 발견!', {
+                            body: `${count}개의 새로운 논문이 발견되었습니다.`,
+                            icon: '📚'
+                        });
+                    }
+                });
+            }
+            
+            // 페이지 내 알림 표시
+            const alertDiv = document.createElement('div');
+            alertDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                z-index: 10000;
+                max-width: 400px;
+                animation: slideIn 0.3s ease-out;
+            `;
+            alertDiv.innerHTML = `
+                <h3 style="margin-bottom: 10px;">🆕 새로운 논문 발견!</h3>
+                <p style="margin-bottom: 5px;">${count}개의 새로운 논문이 발견되었습니다.</p>
+                <p style="font-size: 0.9em; opacity: 0.9;">${escapeHtml(titles)}${moreCount}</p>
+                <button onclick="this.parentElement.remove()" style="margin-top: 10px; padding: 5px 15px; background: white; color: #4caf50; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">닫기</button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            // 15초 후 자동 제거
+            setTimeout(() => {
+                if (alertDiv.parentElement) {
+                    alertDiv.remove();
+                }
+            }, 15000);
         }
 
         // XSS 방지
