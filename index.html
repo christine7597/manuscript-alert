@@ -746,10 +746,11 @@
 
                 // Promise.all 대신 Promise.allSettled 사용 (일부 실패해도 계속)
                 const results = await Promise.allSettled(semanticPromises);
-                papers = results.map(result => result.status === 'fulfilled' ? result.value : null).filter(p => p !== null);
+                const processedPapers = results.map(result => result.status === 'fulfilled' ? result.value : null).filter(p => p !== null);
                 
-                // 나머지 논문도 포함 (인용 수 없어도)
-                papers = [...papers, ...papers.slice(50)];
+                // 나머지 논문도 포함 (인용 수 없어도, Semantic Scholar API 호출 안 함)
+                const remainingPapers = papers.slice(50);
+                papers = [...processedPapers, ...remainingPapers];
 
                 // 인용 수가 높은 논문 우선 정렬 (오래된 논문도 포함)
                 let popularPapers = papers
